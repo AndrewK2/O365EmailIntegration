@@ -1,0 +1,69 @@
+<% var refreshToken, error, $; %>
+<% if(refreshToken) { %>
+    <div id="tokenOk" class="alert alert-success d-inline-block">
+        <div>Refresh token received.</div>
+        <div id="progressText" style="display: none">Fetching mailbox<span></span></div>
+    </div>
+    <script>
+        let progressBlock = $('#progressText');
+        let indicator = $('#progressText span');
+        let progressInterval = window.setInterval(function () {
+            indicator.text(indicator.text().length > 3 ? '' : indicator.text() + '.');
+        }, 300)
+
+        function cancelProgress() {
+            window.clearInterval(progressInterval);
+            progressBlock.hide();
+        }
+
+        progressBlock.show();
+
+        function displayError(error) {
+            $('<textarea class="alert alert-danger w-100" rows="5">' + error + '</textarea>').insertAfter("#tokenOk");
+        }
+
+        const fetchUrl = "fetch/inbox.json?refresh_token=" + decodeURIComponent("<%= refreshToken.replace('"', '\"') %>");
+        $.getJSON(fetchUrl, function (data) {
+            if (data.error) {
+                displayError(data.error);
+                return;
+            }
+            const items = [
+                "<p><b>Username</b>: " + data.username + "</p>",
+                "<p><b>Fetched emails:</b> " + data.emails?.length + "</p>"
+            ];
+
+            items.push("<div class='list-group'>")
+            $.each(data.emails, function (key, val) {
+                items.push(
+                    "<div class='list-group-item'>"
+                    + "<h6>" + val.from + "</h6>"
+                    + "<p class='font-weight: bold'>" + val.date + "</p>"
+                    +
+                    "</div>");
+            });
+            items.push("</div>")
+
+            $("<div>", {
+                html: items.join("")
+            }).insertAfter("#tokenOk");
+        }).fail(function (error) {
+            console.error("Error", error);
+        }).always(function () {
+            cancelProgress();
+        });
+    </script>
+<% } else { %>
+    <div class="alert alert-warning d-inline-block">
+        Refresh token not received
+    </div>
+<% } %>
+
+<% if(error) { %>
+    <textarea class="alert alert-danger w-100" rows="5"><%= error %></textarea>
+<% } %>
+<% if(error || !refreshToken) { %>
+    <div>
+        <a href="/step1" class="btn btn-danger">Restart</a>
+    </div>
+<% } %>
