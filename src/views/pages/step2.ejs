@@ -1,0 +1,22 @@
+<% var authorizationCode, error, refreshToken; %>
+<% if(authorizationCode) { %>
+    <div>
+        <p class="alert alert-success d-inline-block">
+            Authorization code received
+        </p>
+    </div>
+<% } else { %>
+    <div class="alert alert-warning d-inline-block">
+        Authorization code not received.
+    </div>
+<% } %>
+
+<% if(error) { %>
+    <textarea class="alert alert-danger w-100" rows="5"><%= error %></textarea>
+<% } %>
+
+<% if(error || !authorizationCode) { %>
+<div>
+    <a href="/step1" class="btn btn-danger">Restart</a>
+</div>
+<% } %>
