@@ -4,23 +4,29 @@ import path from "node:path";
 import expressLayouts from 'express-ejs-layouts';
 import * as querystring from "querystring";
 import nocache from "nocache";
+import * as fs from "fs";
 
 const tokenEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 const authEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 
+const appConsole = new console.Console(
+  fs.createWriteStream("./logger.txt"),
+  fs.createWriteStream("./error.txt")
+);
+
 dotenv.config();
 
-const app: Express = express();
 const port = process.env.PORT || 3000;
 
-app.use(nocache());
+const app: Express = express();
 
+
+app.use(nocache());
 app.use(expressLayouts);
 app.set("views", path.join(__dirname, 'views'));
 app.set("view engine", 'ejs');
 
 app.get("/", (req, res) => res.redirect("/step1"));
-
 
 app.get("/step1", (req: Request, res: Response) => {
   const authParameters = {
@@ -38,46 +44,97 @@ app.get("/step1", (req: Request, res: Response) => {
 
   const office365AuthorizationUrl = authEndpoint + "?" + querystring.stringify(authParameters);
 
-  res.render('pages/step1', {
-    authUrl: office365AuthorizationUrl,
-  });
+  res.render('pages/step1', {authUrl: office365AuthorizationUrl});
 });
 
 app.get("/step2", async (req: Request, res: Response) => {
   const authorizationCode = req.query['code'];
-  console.debug("Authorization code received: ", authorizationCode)
+  appConsole.debug("Authorization code received: ", authorizationCode)
 
   let error, refreshToken: string | undefined;
 
   if(authorizationCode) {
-    console.debug("Redeeming authorization code: ", authorizationCode)
+    appConsole.debug("Redeeming authorization code: ", authorizationCode)
 
     try {
       refreshToken = await retrieveRefreshToken(authorizationCode.toString(), req);
 
-      console.debug("Refresh token received: ", refreshToken)
+      appConsole.debug("Refresh token received: ", refreshToken)
 
       return res.redirect("/step3?" + querystring.stringify({refresh_token: refreshToken}));
     } catch (e) {
-      console.error(`Failed to redeem authorization code "${authorizationCode}": ${e}`)
+      appConsole.error(`Failed to redeem authorization code "${authorizationCode}": ${e}`)
       error = e?.toString()
     }
   }
 
-  res.render('pages/step2', {
-    authorizationCode,
-    refreshToken,
-    error
+  res.render('pages/step2', {authorizationCode, error});
+});
+
+app.get("/step3", async (req: Request, res: Response) => {
+  const refreshToken = req.query['refresh_token'];
+  appConsole.debug("Refresh token received: ", refreshToken)
+
+  res.render('pages/step3', {
+    refreshToken
   });
+});
+app.get("/fetch/inbox.json", async (req: Request, res: Response) => {
+  const refreshToken = req.query['refresh_token']?.toString();
+
+  const fail = (error: string) => res.json({error: "Failed to fetch mailbox: " + error});
+
+  try {
+    appConsole.debug("Fetching inbox using refresh token: ", refreshToken)
+
+    if(!refreshToken) {
+      return fail("No refresh token");
+    }
+
+    const t = await retrieveAccessToken(refreshToken, req)
+
+    appConsole.log("RETRIEVED", t)
+
+    res.json([1, 2, 3]);
+  } catch (e) {
+    return fail("Failed to fetch mailbox: " + e);
+  }
 });
 
 app.listen(port, () => {
-  console.log(`[server]: Server is running at http://localhost:${port}`);
+  appConsole.log(`[server]: Server is running at http://localhost:${port}`);
 });
-
 
 function createOAuthRedirectUrl(req: Request): string {
   return `https://${req.get('host')}/step2`;
+}
+
+async function callTokenEndpoint(tokenParameters: any): Promise<any> {
+  const response = await fetch(tokenEndpoint, {
+    method: 'POST',
+    body: querystring.stringify(tokenParameters),
+    headers: {'Content-type': 'application/x-www-form-urlencoded'},
+  })
+
+  appConsole.debug("HTTP status: ", response.status, response.statusText)
+
+  const json = await response.text();
+  appConsole.debug("Response JSON: ", json)
+
+  let parsedResponse = json ? JSON.parse(json) : undefined;
+
+  if(!parsedResponse) {
+    throw new Error(`Empty response received, HTTP status "${response.status}"`)
+  }
+
+  const tokenError = parsedResponse["error"];
+  const tokenErrorDescr = parsedResponse["error_description"];
+
+  if(tokenError || tokenErrorDescr) {
+    throw new Error("Failed to call token endpoint: " + [tokenError, tokenErrorDescr].join("\n\n"))
+  }
+
+  return parsedResponse;
 }
 
 async function retrieveRefreshToken(authorizationCode: string, req: Request): Promise<string | undefined> {
@@ -89,41 +146,28 @@ async function retrieveRefreshToken(authorizationCode: string, req: Request): Pr
     redirect_uri: createOAuthRedirectUrl(req)
   };
 
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    body: querystring.stringify(tokenParameters),
-    headers: {'Content-type': 'application/x-www-form-urlencoded'},
-  })
-
-  console.debug("HTTP status: ", response.status)
-
-  const json = await response.text();
-  console.debug("Response JSON: ", json)
-
-  let parsedResponse: any | undefined;
-  if(json) {
-    parsedResponse = JSON.parse(json);
-  } else {
-    parsedResponse = undefined;
-  }
-
-  if(!parsedResponse) {
-    throw new Error(`Empty response received, HTTP status "${response.status}"`)
-  }
+  let parsedResponse = await callTokenEndpoint(tokenParameters);
 
   const refreshToken = parsedResponse['refresh_token'];
   if(refreshToken) {
     return refreshToken;
   }
 
-  console.error("Refresh token not found in the response", parsedResponse)
-
-  const tokenError = parsedResponse["error"];
-  const tokenErrorDescr = parsedResponse["error_description"];
-
-  if(tokenError || tokenErrorDescr) {
-    throw new Error("Failed to redeem auth code: " + [tokenError, tokenErrorDescr].join("\n\n"))
-  }
-
+  appConsole.error("Refresh token not found in the response", parsedResponse)
   throw new Error("No refresh token received from server");
+}
+
+async function retrieveAccessToken(refreshToken: string, req: Request): Promise<string | undefined> {
+  const tokenParameters = {
+    client_id: process.env.OAUTH_CLIENT_ID,
+    client_secret: process.env.OAUTH_CLIENT_SECRET,
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+  };
+
+  let parsedResponse = await callTokenEndpoint(tokenParameters);
+
+
+
+  return undefined;
 }

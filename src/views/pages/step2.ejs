@@ -1,4 +1,4 @@
-<% var authorizationCode, error, refreshToken; %>
+<% var authorizationCode, error; %>
 <% if(authorizationCode) { %>
     <div>
         <p class="alert alert-success d-inline-block">
@@ -16,7 +16,7 @@
 <% } %>
 
 <% if(error || !authorizationCode) { %>
-<div>
-    <a href="/step1" class="btn btn-danger">Restart</a>
-</div>
+    <div>
+        <a href="/step1" class="btn btn-danger">Restart</a>
+    </div>
 <% } %>

@@ -41,11 +41,13 @@ const node_path_1 = __importDefault(require("node:path"));
 const express_ejs_layouts_1 = __importDefault(require("express-ejs-layouts"));
 const querystring = __importStar(require("querystring"));
 const nocache_1 = __importDefault(require("nocache"));
+const fs = __importStar(require("fs"));
 const tokenEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const authEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
+const appConsole = new console.Console(fs.createWriteStream("./logger.txt"), fs.createWriteStream("./error.txt"));
 dotenv_1.default.config();
-const app = (0, express_1.default)();
 const port = process.env.PORT || 3000;
+const app = (0, express_1.default)();
 app.use((0, nocache_1.default)());
 app.use(express_ejs_layouts_1.default);
 app.set("views", node_path_1.default.join(__dirname, 'views'));
@@ -65,37 +67,77 @@ app.get("/step1", (req, res) => {
         //login_hint: 'john@example.local' //to pre-populate the email field in the auth form
     };
     const office365AuthorizationUrl = authEndpoint + "?" + querystring.stringify(authParameters);
-    res.render('pages/step1', {
-        authUrl: office365AuthorizationUrl,
-    });
+    res.render('pages/step1', { authUrl: office365AuthorizationUrl });
 });
 app.get("/step2", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const authorizationCode = req.query['code'];
-    console.debug("Authorization code received: ", authorizationCode);
+    appConsole.debug("Authorization code received: ", authorizationCode);
     let error, refreshToken;
     if (authorizationCode) {
-        console.debug("Redeeming authorization code: ", authorizationCode);
+        appConsole.debug("Redeeming authorization code: ", authorizationCode);
         try {
             refreshToken = yield retrieveRefreshToken(authorizationCode.toString(), req);
-            console.debug("Refresh token received: ", refreshToken);
+            appConsole.debug("Refresh token received: ", refreshToken);
             return res.redirect("/step3?" + querystring.stringify({ refresh_token: refreshToken }));
         }
         catch (e) {
-            console.error(`Failed to redeem authorization code "${authorizationCode}": ${e}`);
+            appConsole.error(`Failed to redeem authorization code "${authorizationCode}": ${e}`);
             error = e === null || e === void 0 ? void 0 : e.toString();
         }
     }
-    res.render('pages/step2', {
-        authorizationCode,
-        refreshToken,
-        error
+    res.render('pages/step2', { authorizationCode, error });
+}));
+app.get("/step3", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const refreshToken = req.query['refresh_token'];
+    appConsole.debug("Refresh token received: ", refreshToken);
+    res.render('pages/step3', {
+        refreshToken
     });
 }));
+app.get("/fetch/inbox.json", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const refreshToken = (_a = req.query['refresh_token']) === null || _a === void 0 ? void 0 : _a.toString();
+    const fail = (error) => res.json({ error: "Failed to fetch mailbox: " + error });
+    try {
+        appConsole.debug("Fetching inbox using refresh token: ", refreshToken);
+        if (!refreshToken) {
+            return fail("No refresh token");
+        }
+        const t = yield retrieveAccessToken(refreshToken, req);
+        appConsole.log("RETRIEVED", t);
+        res.json([1, 2, 3]);
+    }
+    catch (e) {
+        return fail("Failed to fetch mailbox: " + e);
+    }
+}));
 app.listen(port, () => {
-    console.log(`[server]: Server is running at http://localhost:${port}`);
+    appConsole.log(`[server]: Server is running at http://localhost:${port}`);
 });
 function createOAuthRedirectUrl(req) {
     return `https://${req.get('host')}/step2`;
+}
+function callTokenEndpoint(tokenParameters) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = yield fetch(tokenEndpoint, {
+            method: 'POST',
+            body: querystring.stringify(tokenParameters),
+            headers: { 'Content-type': 'application/x-www-form-urlencoded' },
+        });
+        appConsole.debug("HTTP status: ", response.status, response.statusText);
+        const json = yield response.text();
+        appConsole.debug("Response JSON: ", json);
+        let parsedResponse = json ? JSON.parse(json) : undefined;
+        if (!parsedResponse) {
+            throw new Error(`Empty response received, HTTP status "${response.status}"`);
+        }
+        const tokenError = parsedResponse["error"];
+        const tokenErrorDescr = parsedResponse["error_description"];
+        if (tokenError || tokenErrorDescr) {
+            throw new Error("Failed to call token endpoint: " + [tokenError, tokenErrorDescr].join("\n\n"));
+        }
+        return parsedResponse;
+    });
 }
 function retrieveRefreshToken(authorizationCode, req) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -106,34 +148,24 @@ function retrieveRefreshToken(authorizationCode, req) {
             client_secret: process.env.OAUTH_CLIENT_SECRET,
             redirect_uri: createOAuthRedirectUrl(req)
         };
-        const response = yield fetch(tokenEndpoint, {
-            method: 'POST',
-            body: querystring.stringify(tokenParameters),
-            headers: { 'Content-type': 'application/x-www-form-urlencoded' },
-        });
-        console.debug("HTTP status: ", response.status);
-        const json = yield response.text();
-        console.debug("Response JSON: ", json);
-        let parsedResponse;
-        if (json) {
-            parsedResponse = JSON.parse(json);
-        }
-        else {
-            parsedResponse = undefined;
-        }
-        if (!parsedResponse) {
-            throw new Error(`Empty response received, HTTP status "${response.status}"`);
-        }
+        let parsedResponse = yield callTokenEndpoint(tokenParameters);
         const refreshToken = parsedResponse['refresh_token'];
         if (refreshToken) {
             return refreshToken;
         }
-        console.error("Refresh token not found in the response", parsedResponse);
-        const tokenError = parsedResponse["error"];
-        const tokenErrorDescr = parsedResponse["error_description"];
-        if (tokenError || tokenErrorDescr) {
-            throw new Error("Failed to redeem auth code: " + [tokenError, tokenErrorDescr].join("\n\n"));
-        }
+        appConsole.error("Refresh token not found in the response", parsedResponse);
         throw new Error("No refresh token received from server");
+    });
+}
+function retrieveAccessToken(refreshToken, req) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const tokenParameters = {
+            client_id: process.env.OAUTH_CLIENT_ID,
+            client_secret: process.env.OAUTH_CLIENT_SECRET,
+            refresh_token: refreshToken,
+            grant_type: "refresh_token",
+        };
+        let parsedResponse = yield callTokenEndpoint(tokenParameters);
+        return undefined;
     });
 }
