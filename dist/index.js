@@ -43,6 +43,7 @@ const querystring = __importStar(require("querystring"));
 const nocache_1 = __importDefault(require("nocache"));
 const fs = __importStar(require("fs"));
 const jwt_decode_1 = require("jwt-decode");
+const imapFetcher_1 = require("./imapFetcher");
 const tokenEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const authEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 const appConsole = new console.Console({
@@ -67,6 +68,7 @@ app.get("/step1", (req, res) => {
             "https://outlook.office.com/SMTP.Send",
             "offline_access",
             "openid",
+            "email"
         ].join(" "),
         redirect_uri: createOAuthRedirectUrl(req)
         //state: 'your-auth-session-id-here-if-needed',
@@ -104,7 +106,7 @@ app.get("/step3", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 app.get("/fetch/inbox.json", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     const refreshToken = (_a = req.query['refresh_token']) === null || _a === void 0 ? void 0 : _a.toString();
-    const fail = (error) => res.json({ error: "Failed to fetch mailbox: " + error });
+    const fail = (error) => res.json({ error });
     try {
         appConsole.debug("Fetching inbox using refresh token: ", refreshToken);
         if (!refreshToken) {
@@ -113,7 +115,13 @@ app.get("/fetch/inbox.json", (req, res) => __awaiter(void 0, void 0, void 0, fun
         const [accessToken, emailAddress] = yield retrieveAccessToken(refreshToken);
         appConsole.log("Using email: ", emailAddress);
         appConsole.log("Using access token: ", accessToken);
-        res.json([1, 2, 3]);
+        const fetcher = new imapFetcher_1.ImapFetcher(emailAddress, accessToken, appConsole);
+        const emails = (yield fetcher.Fetch()).sort((a, b) => b.UID - a.UID);
+        appConsole.log("Fetched: ", emails);
+        res.json({
+            username: emailAddress,
+            emails: emails
+        });
     }
     catch (e) {
         return fail("Failed to fetch mailbox: " + e);

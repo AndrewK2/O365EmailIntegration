@@ -28,23 +28,30 @@
                 displayError(data.error);
                 return;
             }
+            const items = [
+                "<p>Username: " + data.username + "</p>",
+                "<p>Fetched emails: " + data.emails?.length + "</p>"
+            ];
 
-            const items = [];
-            $.each(data.messages, function (key, val) {
-                items.push("<li id='" + key + "'>" + val + "</li>");
+            items.push("<div class='list-group'>")
+            $.each(data.emails, function (key, val) {
+                items.push(
+                    "<div class='list-group-item'>"
+                    + "<h6>" + val.from + "</h6>"
+                    + "<p class='font-weight: bold'>" + val.date + "</p>"
+                    +
+                    "</div>");
             });
+            items.push("</div>")
 
-            $("<ul/>", {
-                "class": "my-new-list",
+            $("<div>", {
                 html: items.join("")
             }).insertAfter("#tokenOk");
-        })
-            .fail(function (error) {
-                console.error("Error", error);
-            })
-            .always(function () {
-                cancelProgress();
-            });
+        }).fail(function (error) {
+            console.error("Error", error);
+        }).always(function () {
+            cancelProgress();
+        });
     </script>
 <% } else { %>
     <div class="alert alert-warning d-inline-block">

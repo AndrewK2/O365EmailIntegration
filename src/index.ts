@@ -6,6 +6,7 @@ import * as querystring from "querystring";
 import nocache from "nocache";
 import * as fs from "fs";
 import {jwtDecode} from "jwt-decode";
+import {ImapFetcher} from "./imapFetcher";
 
 const tokenEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 const authEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
@@ -24,7 +25,6 @@ const port = process.env.PORT || 3000;
 
 const app: Express = express();
 
-
 app.use(nocache());
 app.use(expressLayouts);
 app.set("views", path.join(__dirname, 'views'));
@@ -41,6 +41,7 @@ app.get("/step1", (req: Request, res: Response) => {
       "https://outlook.office.com/SMTP.Send",
       "offline_access",
       "openid",
+      "email"
     ].join(" "),
     redirect_uri: createOAuthRedirectUrl(req)
     //state: 'your-auth-session-id-here-if-needed',
@@ -89,7 +90,7 @@ app.get("/step3", async (req: Request, res: Response) => {
 app.get("/fetch/inbox.json", async (req: Request, res: Response) => {
   const refreshToken = req.query['refresh_token']?.toString();
 
-  const fail = (error: string) => res.json({error: "Failed to fetch mailbox: " + error});
+  const fail = (error: string) => res.json({error});
 
   try {
     appConsole.debug("Fetching inbox using refresh token: ", refreshToken)
@@ -103,7 +104,15 @@ app.get("/fetch/inbox.json", async (req: Request, res: Response) => {
     appConsole.log("Using email: ", emailAddress)
     appConsole.log("Using access token: ", accessToken)
 
-    res.json([1, 2, 3]);
+    const fetcher = new ImapFetcher(emailAddress, accessToken, appConsole);
+    const emails = (await fetcher.Fetch()).sort((a, b) => b.UID - a.UID);
+
+    appConsole.log("Fetched: ", emails)
+
+    res.json({
+      username: emailAddress,
+      emails: emails
+    });
   } catch (e) {
     return fail("Failed to fetch mailbox: " + e);
   }
