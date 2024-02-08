@@ -5,13 +5,17 @@ import expressLayouts from 'express-ejs-layouts';
 import * as querystring from "querystring";
 import nocache from "nocache";
 import * as fs from "fs";
+import {jwtDecode} from "jwt-decode";
 
 const tokenEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 const authEndpoint = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 
 const appConsole = new console.Console(
-  fs.createWriteStream("./logger.txt"),
-  fs.createWriteStream("./error.txt")
+  {
+    stdout: fs.createWriteStream("./logger.txt", {flags: "a+"}),
+    stderr: fs.createWriteStream("./error.txt", {flags: "a+"}),
+    colorMode: false
+  }
 );
 
 dotenv.config();
@@ -35,7 +39,10 @@ app.get("/step1", (req: Request, res: Response) => {
     scope: [
       "https://outlook.office.com/IMAP.AccessAsUser.All",
       "https://outlook.office.com/SMTP.Send",
-      "offline_access"
+      "offline_access",
+      "openid",
+      "email",
+      "profile"
     ].join(" "),
     redirect_uri: createOAuthRedirectUrl(req)
     //state: 'your-auth-session-id-here-if-needed',
@@ -52,6 +59,8 @@ app.get("/step2", async (req: Request, res: Response) => {
   appConsole.debug("Authorization code received: ", authorizationCode)
 
   let error, refreshToken: string | undefined;
+
+  error = [req.query['error'], req.query['error_description']].join("\n\n")
 
   if(authorizationCode) {
     appConsole.debug("Redeeming authorization code: ", authorizationCode)
@@ -79,6 +88,7 @@ app.get("/step3", async (req: Request, res: Response) => {
     refreshToken
   });
 });
+
 app.get("/fetch/inbox.json", async (req: Request, res: Response) => {
   const refreshToken = req.query['refresh_token']?.toString();
 
@@ -91,9 +101,10 @@ app.get("/fetch/inbox.json", async (req: Request, res: Response) => {
       return fail("No refresh token");
     }
 
-    const t = await retrieveAccessToken(refreshToken, req)
+    const [accessToken, emailAddress] = await retrieveAccessToken(refreshToken);
 
-    appConsole.log("RETRIEVED", t)
+    appConsole.log("Using email: ", emailAddress)
+    appConsole.log("Using access token: ", accessToken)
 
     res.json([1, 2, 3]);
   } catch (e) {
@@ -119,19 +130,26 @@ async function callTokenEndpoint(tokenParameters: any): Promise<any> {
   appConsole.debug("HTTP status: ", response.status, response.statusText)
 
   const json = await response.text();
-  appConsole.debug("Response JSON: ", json)
 
-  let parsedResponse = json ? JSON.parse(json) : undefined;
+  let parsedResponse: any;
+  try {
+    parsedResponse = json ? JSON.parse(json) : undefined;
+  } catch (error) {
+    appConsole.debug("Raw response JSON: ", json)
+    throw new Error("Failed to parse response JSON: " + json)
+  }
 
   if(!parsedResponse) {
     throw new Error(`Empty response received, HTTP status "${response.status}"`)
   }
 
+  appConsole.debug("Parsed response: ", JSON.stringify(parsedResponse, null, "\t"))
+
   const tokenError = parsedResponse["error"];
   const tokenErrorDescr = parsedResponse["error_description"];
 
   if(tokenError || tokenErrorDescr) {
-    throw new Error("Failed to call token endpoint: " + [tokenError, tokenErrorDescr].join("\n\n"))
+    throw new Error("Failed to call token endpoint: " + [tokenError, tokenErrorDescr].filter(s => !!s).join("\n\n"))
   }
 
   return parsedResponse;
@@ -157,7 +175,7 @@ async function retrieveRefreshToken(authorizationCode: string, req: Request): Pr
   throw new Error("No refresh token received from server");
 }
 
-async function retrieveAccessToken(refreshToken: string, req: Request): Promise<string | undefined> {
+async function retrieveAccessToken(refreshToken: string): Promise<[string, string]> {
   const tokenParameters = {
     client_id: process.env.OAUTH_CLIENT_ID,
     client_secret: process.env.OAUTH_CLIENT_SECRET,
@@ -165,9 +183,13 @@ async function retrieveAccessToken(refreshToken: string, req: Request): Promise<
     grant_type: "refresh_token",
   };
 
-  let parsedResponse = await callTokenEndpoint(tokenParameters);
+  const parsedResponse = await callTokenEndpoint(tokenParameters);
 
+  const idToken = parsedResponse["id_token"];
+  appConsole.debug("Raw id_token: ", idToken);
 
+  const decodedIdToken: any = jwtDecode(idToken);
+  appConsole.debug("Decoded id_token: ", decodedIdToken);
 
-  return undefined;
+  return [parsedResponse["access_token"], decodedIdToken['email']];
 }
