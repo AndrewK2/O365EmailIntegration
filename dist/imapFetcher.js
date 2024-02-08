@@ -75,6 +75,10 @@ class ImapFetcher {
                                     return;
                                 }
                                 console === null || console === void 0 ? void 0 : console.debug("Search complete: ", uids);
+                                if (!uids || uids.length == 0) {
+                                    imap.end();
+                                    return;
+                                }
                                 const fetch = imap.fetch(uids.sort().reverse().filter((u, i) => i < 10), { bodies: 'HEADER.FIELDS (FROM DATE)' });
                                 fetch.on('message', function (msg, seqno) {
                                     console === null || console === void 0 ? void 0 : console.log('Message #%d', seqno);
