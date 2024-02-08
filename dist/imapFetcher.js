@@ -78,7 +78,6 @@ class ImapFetcher {
                                 const fetch = imap.fetch(uids.sort().reverse().filter((u, i) => i < 10), { bodies: 'HEADER.FIELDS (FROM DATE)' });
                                 fetch.on('message', function (msg, seqno) {
                                     console === null || console === void 0 ? void 0 : console.log('Message #%d', seqno);
-                                    const prefix = '(#' + seqno + ') ';
                                     msg.on('body', function (stream, info) {
                                         let buffer = '';
                                         stream.on('data', function (chunk) {
@@ -95,7 +94,7 @@ class ImapFetcher {
                                         });
                                     });
                                     msg.once('end', function () {
-                                        console === null || console === void 0 ? void 0 : console.log(prefix + 'Finished');
+                                        console === null || console === void 0 ? void 0 : console.log(`(#${seqno}) Finished`);
                                     });
                                 });
                                 fetch.once('error', function (err) {

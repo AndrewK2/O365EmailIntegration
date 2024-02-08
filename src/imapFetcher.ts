@@ -78,8 +78,6 @@ export class ImapFetcher {
               fetch.on('message', function (msg, seqno) {
                 console?.log('Message #%d', seqno);
 
-                const prefix = '(#' + seqno + ') ';
-
                 msg.on('body', function (stream, info) {
                   let buffer = '';
                   stream.on('data', function (chunk) {
@@ -99,7 +97,7 @@ export class ImapFetcher {
                 });
 
                 msg.once('end', function () {
-                  console?.log(prefix + 'Finished');
+                  console?.log(`(#${seqno}) Finished`);
                 });
               });
 
