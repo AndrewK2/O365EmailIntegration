@@ -41,8 +41,6 @@ app.get("/step1", (req: Request, res: Response) => {
       "https://outlook.office.com/SMTP.Send",
       "offline_access",
       "openid",
-      "email",
-      "profile"
     ].join(" "),
     redirect_uri: createOAuthRedirectUrl(req)
     //state: 'your-auth-session-id-here-if-needed',
@@ -59,8 +57,7 @@ app.get("/step2", async (req: Request, res: Response) => {
   appConsole.debug("Authorization code received: ", authorizationCode)
 
   let error, refreshToken: string | undefined;
-
-  error = [req.query['error'], req.query['error_description']].join("\n\n")
+  error = [req.query['error'], req.query['error_description']].filter(s => !!s).join("\n\n")
 
   if(authorizationCode) {
     appConsole.debug("Redeeming authorization code: ", authorizationCode)
