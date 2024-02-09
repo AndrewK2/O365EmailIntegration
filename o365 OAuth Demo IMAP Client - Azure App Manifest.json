@@ -1,0 +1,93 @@
+{
+	"id": "960c5ac8-3a73-4b68-b6aa-628d624725de",
+	"acceptMappedClaims": null,
+	"accessTokenAcceptedVersion": 2,
+	"addIns": [],
+	"allowPublicClient": null,
+	"appId": "***REMOVED***",
+	"appRoles": [],
+	"oauth2AllowUrlPathMatching": false,
+	"createdDateTime": "2024-02-07T13:47:42Z",
+	"description": null,
+	"certification": null,
+	"disabledByMicrosoftStatus": null,
+	"groupMembershipClaims": "None",
+	"identifierUris": [],
+	"informationalUrls": {
+		"termsOfService": null,
+		"support": null,
+		"privacy": null,
+		"marketing": null
+	},
+	"keyCredentials": [],
+	"knownClientApplications": [],
+	"logoUrl": "https://aadcdn.msftauthimages.net/c1c6b6c8-299wpzqxlncz2rtudtx0hpghx6yhlltae5taxulccac/appbranding/lxdhrsdphudtjotd1zwqmtyqkbsx76rdfcuwmvifrku/1033/bannerlogo?ts=638430040272395533",
+	"logoutUrl": null,
+	"name": "o365 OAuth Demo IMAP Client",
+	"notes": null,
+	"oauth2AllowIdTokenImplicitFlow": false,
+	"oauth2AllowImplicitFlow": false,
+	"oauth2Permissions": [],
+	"oauth2RequirePostResponse": false,
+	"optionalClaims": {
+		"idToken": [],
+		"accessToken": [
+			{
+				"name": "email",
+				"source": null,
+				"essential": false,
+				"additionalProperties": []
+			}
+		],
+		"saml2Token": []
+	},
+	"orgRestrictions": [],
+	"parentalControlSettings": {
+		"countriesBlockedForMinors": [],
+		"legalAgeGroupRule": "Allow"
+	},
+	"passwordCredentials": [
+		{
+			"customKeyIdentifier": null,
+			"endDate": "2024-05-07T13:38:10.807Z",
+			"keyId": "3677d1bf-3bd4-4e27-b450-e892efcf2f9f",
+			"startDate": "2024-02-07T14:38:10.807Z",
+			"value": null,
+			"createdOn": "2024-02-07T14:38:20.655607Z",
+			"hint": "6fU",
+			"displayName": "***"
+		}
+	],
+	"preAuthorizedApplications": [],
+	"publisherDomain": "NoneCompany821.onmicrosoft.com",
+	"replyUrlsWithType": [
+		{
+			"url": "https://o365-imap-auth.andrew-tests.com/step2",
+			"type": "Web"
+		}
+	],
+	"requiredResourceAccess": [
+		{
+			"resourceAppId": "00000003-0000-0000-c000-000000000000",
+			"resourceAccess": [
+				{
+					"id": "652390e4-393a-48de-9484-05f9b1212954",
+					"type": "Scope"
+				},
+				{
+					"id": "37f7f235-527c-4136-accd-4a02d197296e",
+					"type": "Scope"
+				},
+				{
+					"id": "258f6531-6087-4cc4-bb90-092c5fb3ed3f",
+					"type": "Scope"
+				}
+			]
+		}
+	],
+	"samlMetadataUrl": null,
+	"signInUrl": null,
+	"signInAudience": "AzureADandPersonalMicrosoftAccount",
+	"tags": [],
+	"tokenEncryptionKeyId": null
+}
